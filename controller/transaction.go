@@ -4,7 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"github.com/FISCO-BCOS/go-sdk/hufu/model"
+	"hufu/model"
 	"time"
 )
 

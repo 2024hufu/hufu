@@ -1,6 +1,6 @@
 package controller
 
-import "github.com/FISCO-BCOS/go-sdk/hufu/model"
+import "hufu/model"
 
 func GetSensitiveData(TransactionHash string) model.SensitiveData {
 	data := model.SensitiveData{}

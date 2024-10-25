@@ -3,9 +3,9 @@ package controller
 import (
 	"crypto/ecdsa"
 	"fmt"
-	"github.com/FISCO-BCOS/go-sdk/hufu/model"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
+	"hufu/model"
 	"log"
 )
 
