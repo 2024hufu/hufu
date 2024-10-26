@@ -1,5 +1,6 @@
 package model
 
+// Wallet 钱包
 type Wallet struct {
 	Name       string  `json:"name"`
 	Address    string  `json:"address"`

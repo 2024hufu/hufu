@@ -3,21 +3,64 @@ package controller
 import (
 	"crypto/ecdsa"
 	"fmt"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/crypto"
 	"hufu/model"
 	"log"
+
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/crypto"
 )
 
+func NewWallet(name string, balance float64) (*model.Wallet, error) {
+	privateKey, publicKey, address := generateKeys()
+
+	w := &model.Wallet{
+		Name:       name,
+		Address:    address,
+		PublicKey:  publicKey,
+		PrivateKey: privateKey,
+		Balance:    balance,
+	}
+
+	// Name cannot be repeated
+	if _, err := GetWalletByName(name); err == nil {
+		return nil, fmt.Errorf("wallet name already exists: %s", name)
+	}
+
+	if err := model.DB.Create(w).Error; err != nil {
+		return nil, err
+	}
+
+	return w, nil
+}
+
+func GetWalletByName(Name string) (*model.Wallet, error) {
+	var w model.Wallet
+	if err := model.DB.Where("name = ?", Name).First(&w).Error; err != nil {
+		return nil, err
+	}
+	return &w, nil
+}
+
+func GetWalletByAddress(Address string) (*model.Wallet, error) {
+	var w model.Wallet
+	if err := model.DB.Where("address = ?", Address).First(&w).Error; err != nil {
+		return nil, err
+	}
+	return &w, nil
+}
+
+func SetWalletBalance(Name string, balance float64) error {
+	return model.DB.Model(&model.Wallet{}).Where("name = ?", Name).Update("balance", balance).Error
+}
+
 // generateKeys 生成随机密钥对
-func generateKeys() ([]byte, []byte, string) {
+func generateKeys() (string, string, string) {
 	privateKey, err := crypto.GenerateKey()
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	privateKeyBytes := crypto.FromECDSA(privateKey)
-	fmt.Println("private key: ", hexutil.Encode(privateKeyBytes)[2:]) // privateKey in hex without "0x"
 
 	publicKey := privateKey.Public()
 	publicKeyECDSA, ok := publicKey.(*ecdsa.PublicKey)
@@ -26,62 +69,8 @@ func generateKeys() ([]byte, []byte, string) {
 	}
 
 	publicKeyBytes := crypto.FromECDSAPub(publicKeyECDSA)
-	fmt.Println("publick key: ", hexutil.Encode(publicKeyBytes)[4:]) // publicKey in hex without "0x"
 
 	address := crypto.PubkeyToAddress(*publicKeyECDSA).Hex()
-	fmt.Println("address: ", address) // account address
-	return privateKeyBytes, publicKeyBytes, address
-}
 
-func NewWallet(name string, balance float64) (*model.Wallet, error) {
-	privateKey, publicKey, address := generateKeys()
-
-	//config := &client.Config{
-	//	IsSMCrypto:  false,
-	//	GroupID:     "group0",
-	//	PrivateKey:  privateKey,
-	//	Host:        "127.0.0.1",
-	//	Port:        20200,
-	//	TLSCaFile:   "../conf/ca.crt",
-	//	TLSKeyFile:  "../conf/sdk.key",
-	//	TLSCertFile: "../conf/sdk.crt",
-	//}
-	//client, err := client.DialContext(context.Background(), config)
-	//if err != nil {
-	//	log.Fatal(err)
-	//}
-	//fmt.Println(client)
-
-	w := &model.Wallet{
-		Name:       name,
-		Address:    address,
-		PublicKey:  hexutil.Encode(privateKey)[2:],
-		PrivateKey: hexutil.Encode(publicKey)[4:],
-		Balance:    balance,
-	}
-
-	// Name cannot be repeated
-	if GetWalletByName(name).Name != "" {
-		return nil, fmt.Errorf("wallet name already exists: %s", name)
-	}
-
-	model.DB.Create(w)
-
-	return w, nil
-}
-
-func GetWalletByName(Name string) *model.Wallet {
-	var w model.Wallet
-	model.DB.Where("name = ?", Name).First(&w)
-	return &w
-}
-
-func GetWalletByAddress(Address string) *model.Wallet {
-	var w model.Wallet
-	model.DB.Where("address = ?", Address).First(&w)
-	return &w
-}
-
-func SetWalletBalance(Name string, balance float64) {
-	model.DB.Model(&model.Wallet{}).Where("name = ?", Name).Update("balance", balance)
+	return hexutil.Encode(privateKeyBytes)[2:], hexutil.Encode(publicKeyBytes)[4:], address
 }

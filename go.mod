@@ -3,6 +3,7 @@ module hufu
 go 1.23.1
 
 require (
+	github.com/SSSaaS/sssa-golang v0.0.0-20170502204618-d37d7782d752
 	github.com/ethereum/go-ethereum v1.14.11
 	gorm.io/driver/mysql v1.5.7
 	gorm.io/gorm v1.25.12
