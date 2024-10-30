@@ -1,17 +1,25 @@
 package main
 
 import (
+	"hufu/config"
 	"hufu/controller"
 	"hufu/model"
 	"hufu/router"
+	"hufu/supervisor"
+
+	"fmt"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 )
 
 func main() {
+	if _, err := config.LoadConfig("config/config.yaml"); err != nil {
+		panic(fmt.Sprintf("Error loading config: %v", err))
+	}
 	model.SetupDB()
 	controller.InitWalletPool()
+	supervisor.InitJury()
 	r := gin.Default()
 	r.Use(cors.New(cors.Config{
 		AllowOrigins:     []string{"*"},
@@ -28,20 +36,4 @@ func main() {
 	router.InitHufuRouter(r)
 	router.InitRegulatorRouter(r)
 	r.Run(":3338")
-
-	// w1, _ := controller.NewWallet("Alice1", 100)
-	// w2, _ := controller.NewWallet("Alice2", 100)
-
-	// w1, _ := controller.GetWalletByName("Alice1")
-	// w2, _ := controller.GetWalletByName("Alice2")
-
-	// tx, err := controller.TransferFunds(w1, w2, 10)
-	// if err != nil {
-	// 	fmt.Println(err)
-	// }
-
-	// txs, _ := controller.GetTransferHistory(11)
-	// for _, tx := range txs {
-	// 	fmt.Printf("%+v\n", tx)
-	// }
 }

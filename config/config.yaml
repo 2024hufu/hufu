@@ -1,0 +1,17 @@
+database:
+  username: root
+  password: "123456"
+  host: 127.0.0.1
+  port: 3306
+  dbname: test
+  charset: utf8mb4 
+
+fisco:
+  is_sm_crypto: false
+  group_id: "group0"
+  disable_ssl: false
+  host: "127.0.0.1"
+  port: 20200
+  tls_ca_file: "./config/sdk/ca.crt"
+  tls_key_file: "./config/sdk/sdk.key"
+  tls_cert_file: "./config/sdk/sdk.crt"

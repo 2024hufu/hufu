@@ -277,3 +277,30 @@ func createDesensitizedTransaction(t *model.Transaction) *model.DesensitizedTran
 		TimeRange:    fmt.Sprintf("%d-%d", t.CreatedAt.Unix()-10, t.CreatedAt.Unix()+10),
 	}
 }
+
+// GetEncryptedTransaction 获取加密交易信息
+func GetEncryptedTransaction(walletID uint, privateKey string) ([]*model.Transaction, error) {
+	walletKey, err := GetWalletKeyByWalletID(walletID)
+	if err != nil {
+		return nil, err
+	}
+
+	if walletKey.PrivateKey != privateKey {
+		return nil, errors.ErrPrivateKeyInvalid
+	}
+
+	// 从数据库读取
+	var txs []*model.Transaction
+	if err := model.DB.Where("from_wallet_id = ? OR to_wallet_id = ?", walletID, walletID).Find(&txs).Error; err != nil {
+		return nil, err
+	}
+
+	res := make([]*model.Transaction, 0)
+	for _, tx := range txs {
+		if tx.Type == model.DirectTransaction {
+			res = append(res, tx)
+		}
+	}
+
+	return res, nil
+}

@@ -56,7 +56,7 @@ func EncryptData(key string, data string) (string, error) {
 }
 
 // DecryptData decrypts data using ECIES with the provided ECDSA private key.
-func DecryptData(rawData string) (string, error) {
+func DecryptData(rawData string, pk string) (string, error) {
 	// Decode the base64 encoded ciphertext
 	ciphertext, err := base64.StdEncoding.DecodeString(rawData)
 	if err != nil {
@@ -64,7 +64,7 @@ func DecryptData(rawData string) (string, error) {
 	}
 
 	// Decode the private key from hex
-	privateKeyBytes, err := hex.DecodeString(ProxyPrivateKey)
+	privateKeyBytes, err := hex.DecodeString(pk)
 	if err != nil {
 		return "", fmt.Errorf("failed to decode private key: %v", err)
 	}
@@ -120,21 +120,3 @@ func SharePrivateKey(PrivateKey string) ([]string, error) {
 	result, err := sssa.Create(MINIMUM, SHARES5, PrivateKey)
 	return result, err
 }
-
-// func ReadConfig() *client.Config {
-// 	privateKey, _ := hex.DecodeString("145e247e170ba3afd6ae97e88f00dbc976c2345d511b0f6713355d19d8b80b58")
-// 	// disable ssl of node rpc
-// 	config := &client.Config{
-// 		IsSMCrypto:  false,
-// 		GroupID:     "group0",
-// 		DisableSsl:  false,
-// 		PrivateKey:  privateKey,
-// 		Host:        "127.0.0.1",
-// 		Port:        20200,
-// 		TLSCaFile:   "./conf/ca.crt",
-// 		TLSKeyFile:  "./conf/sdk.key",
-// 		TLSCertFile: "./conf/sdk.crt",
-// 	}
-
-// 	return config
-// }

@@ -53,3 +53,25 @@ func GetTransferHistory(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"data": transactions})
 }
+
+// GetEncryptedTransaction 获取加密交易信息
+func GetEncryptedTransaction(c *gin.Context) {
+	type Req struct {
+		WalletID   uint   `json:"wallet_id"`
+		PrivateKey string `json:"private_key"`
+	}
+
+	var req Req
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	encryptedTx, err := controller.GetEncryptedTransaction(req.WalletID, req.PrivateKey)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": encryptedTx})
+}
