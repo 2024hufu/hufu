@@ -14,7 +14,20 @@ func SetupDB() *gorm.DB {
 	if err != nil {
 		panic("failed to connect database")
 	}
-	db.AutoMigrate(&Wallet{}, &Transaction{}, &EncryptedTransaction{}, &DesensitizedTransaction{})
+
+	// 按照依赖关系顺序进行迁移
+	err = db.AutoMigrate(
+		&Wallet{},
+		&WalletKey{},
+		&Transaction{},
+		&EncryptedTransaction{},
+		&DesensitizedTransaction{},
+		&AbnormalTransaction{},
+	)
+	if err != nil {
+		panic("failed to auto migrate: " + err.Error())
+	}
+
 	DB = db
 	return db
 }

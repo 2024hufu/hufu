@@ -1,2 +1,0 @@
-package secret_sharing
-

@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"errors"
 	"fmt"
 	"hufu/model"
 	"log"
@@ -74,16 +75,16 @@ func (wp *WalletPool) GetAllWallets() []*model.Wallet {
 }
 
 // GetRandomWallets 从池中随机获取指定数量的钱包
-func (wp *WalletPool) GetRandomWallets(count int) []*model.Wallet {
+func (wp *WalletPool) GetRandomWallets(count int) ([]*model.Wallet, error) {
 	wp.mutex.RLock()
 	defer wp.mutex.RUnlock()
 
 	if len(wp.wallets) == 0 {
-		return nil
+		return nil, errors.New("no wallets in the pool")
 	}
 
 	if count >= len(wp.wallets) {
-		return wp.wallets
+		return nil, errors.New("not enough wallets in the pool")
 	}
 
 	selectedWallets := make([]*model.Wallet, count)
@@ -92,5 +93,5 @@ func (wp *WalletPool) GetRandomWallets(count int) []*model.Wallet {
 		selectedWallets[i] = wp.wallets[indexes[i]]
 	}
 
-	return selectedWallets
+	return selectedWallets, nil
 }
