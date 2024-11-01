@@ -1,9 +1,9 @@
 database:
   username: root
-  password: "123456"
+  password: "zss123456zss"
   host: 127.0.0.1
   port: 3306
-  dbname: test
+  dbname: gva
   charset: utf8mb4 
 
 fisco:
@@ -15,3 +15,7 @@ fisco:
   tls_ca_file: "./config/sdk/ca.crt"
   tls_key_file: "./config/sdk/sdk.key"
   tls_cert_file: "./config/sdk/sdk.crt"
+
+contract:
+  key_share_contract: "0x0102e8b6fc8cdf9626fddc1c3ea8c1e79b3fce94"
+  decision_contract: "0x33e56a083e135936c1144960a708c43a661706c0"
