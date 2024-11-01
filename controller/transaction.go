@@ -1,14 +1,11 @@
 package controller
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
 	"hufu/errors"
 	"hufu/model"
 	"hufu/utils"
-	"log"
-	"net/http"
+	"time"
 
 	"gorm.io/gorm"
 )
@@ -69,21 +66,37 @@ func TransferFunds(from *model.Wallet, to *model.Wallet, amount float64) (*model
 }
 
 // GetTransferHistory 获取转账历史
-func GetTransferHistory(walletID uint) ([]*model.Transaction, error) {
+func GetTransferHistory(walletID uint, page, pageSize int) (*model.PageResult, error) {
+	var total int64
 	var transactions []*model.Transaction
 
-	// 查询与指定钱包ID相关的交易记录
-	if err := model.DB.Where("from_wallet_id = ? OR to_wallet_id = ?", walletID, walletID).Find(&transactions).Error; err != nil {
+	// 计算偏移量
+	offset := (page - 1) * pageSize
+
+	// 先获取总数
+	if err := model.DB.Model(&model.Transaction{}).
+		Where("(from_wallet_id = ? OR to_wallet_id = ?) AND type = ?",
+			walletID, walletID, model.DirectTransaction).
+		Count(&total).Error; err != nil {
 		return nil, err
 	}
-	var res []*model.Transaction
-	for _, tx := range transactions {
-		if tx.Type == model.DirectTransaction {
-			res = append(res, tx)
-		}
+
+	// 查询分页数据
+	if err := model.DB.Where("(from_wallet_id = ? OR to_wallet_id = ?) AND type = ?",
+		walletID, walletID, model.DirectTransaction).
+		Limit(pageSize).
+		Offset(offset).
+		Order("created_at DESC"). // 按创建时间倒序
+		Find(&transactions).Error; err != nil {
+		return nil, err
 	}
 
-	return res, nil
+	return &model.PageResult{
+		List:     transactions,
+		Total:    total,
+		Page:     page,
+		PageSize: pageSize,
+	}, nil
 }
 
 // createOriginalTransaction 创建原始交易记录
@@ -118,20 +131,20 @@ func validateTransaction(tx *gorm.DB, from *model.Wallet, originalTx *model.Tran
 		}
 
 		// 异步发送告警
-		go func() {
-			jsonData, err := json.Marshal(abnormal)
-			if err != nil {
-				log.Printf("marshal abnormal transaction failed: %v", err)
-				return
-			}
+		// go func() {
+		// 	jsonData, err := json.Marshal(abnormal)
+		// 	if err != nil {
+		// 		log.Printf("marshal abnormal transaction failed: %v", err)
+		// 		return
+		// 	}
 
-			resp, err := http.Post("http://127.0.0.1:3338/api/v1/regulator/alert", "application/json", bytes.NewBuffer(jsonData))
-			if err != nil {
-				log.Printf("send alert failed: %v", err)
-				return
-			}
-			defer resp.Body.Close()
-		}()
+		// 	resp, err := http.Post("http://127.0.0.1:3338/api/v1/regulator/alert", "application/json", bytes.NewBuffer(jsonData))
+		// 	if err != nil {
+		// 		log.Printf("send alert failed: %v", err)
+		// 		return
+		// 	}
+		// 	defer resp.Body.Close()
+		// }()
 
 		return errors.ErrTransactionAmountTooLarge
 	}
@@ -303,4 +316,251 @@ func GetEncryptedTransaction(walletID uint, privateKey string) ([]*model.Transac
 	}
 
 	return res, nil
+}
+
+// GetDesensitizedTransaction 获取脱敏交易记录
+func GetDesensitizedTransaction(walletID uint) ([]*model.DesensitizedTransaction, error) {
+	var txs []*model.DesensitizedTransaction
+	if err := model.DB.Where("from_wallet_id = ? OR to_wallet_id = ?", walletID, walletID).Find(&txs).Error; err != nil {
+		return nil, err
+	}
+	return txs, nil
+}
+
+// GetReceivedTransactions 获取收款记录
+func GetReceivedTransactions(walletID uint, page, pageSize int) (*model.PageResult, error) {
+	var total int64
+	var transactions []*model.Transaction
+
+	// 计算偏移量
+	offset := (page - 1) * pageSize
+
+	// 先获取总数
+	if err := model.DB.Model(&model.Transaction{}).
+		Where("to_wallet_id = ? AND type = ? AND status = ?",
+			walletID,
+			model.DirectTransaction,
+			"completed").
+		Count(&total).Error; err != nil {
+		return nil, err
+	}
+
+	// 查询分页数据
+	if err := model.DB.Where("to_wallet_id = ? AND type = ? AND status = ?",
+		walletID,
+		model.DirectTransaction,
+		"completed").
+		Limit(pageSize).
+		Offset(offset).
+		Order("created_at DESC"). // 按创建时间倒序
+		Find(&transactions).Error; err != nil {
+		return nil, err
+	}
+
+	return &model.PageResult{
+		List:     transactions,
+		Total:    total,
+		Page:     page,
+		PageSize: pageSize,
+	}, nil
+}
+
+// TransactionStats 交易统计信息
+type TransactionStats struct {
+	TotalAmount float64 `json:"total_amount"` // 总收入
+	TodayAmount float64 `json:"today_amount"` // 今日收入
+	WeekAmount  float64 `json:"week_amount"`  // 本周收入
+	MonthAmount float64 `json:"month_amount"` // 本月收入
+}
+
+// GetTransactionStats 获取交易统计信息
+func GetTransactionStats(walletID uint) (*TransactionStats, error) {
+	var stats TransactionStats
+
+	// 获取时间范围
+	now := time.Now()
+
+	// 今天开始时间（0点）
+	todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+
+	// 本周开始时间（修正：从周一开始计算）
+	offset := int(time.Monday - now.Weekday())
+	if offset > 0 {
+		offset = -6
+	}
+	weekStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()).AddDate(0, 0, offset)
+
+	// 本月开始时间（修正：使用当前月份的第一天）
+	monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+
+	// 查询所有的交易
+	var txs []*model.Transaction
+	if err := model.DB.Where("to_wallet_id = ? AND type = ? AND status = ?",
+		walletID, model.DirectTransaction, "completed").Find(&txs).Error; err != nil {
+		return nil, err
+	}
+
+	// 计算总收入
+	for _, tx := range txs {
+		stats.TotalAmount += tx.Amount
+	}
+
+	// 计算今日收入
+	for _, tx := range txs {
+		if tx.CreatedAt.After(todayStart) {
+			stats.TodayAmount += tx.Amount
+		}
+	}
+
+	// 计算本周收入
+	for _, tx := range txs {
+		if tx.CreatedAt.After(weekStart) {
+			stats.WeekAmount += tx.Amount
+		}
+	}
+
+	// 计算本月收入
+	nextMonth := time.Date(now.Year(), now.Month()+1, 1, 0, 0, 0, 0, now.Location())
+	for _, tx := range txs {
+		if tx.CreatedAt.After(monthStart) && tx.CreatedAt.Before(nextMonth) {
+			stats.MonthAmount += tx.Amount
+		}
+	}
+
+	return &stats, nil
+}
+
+// TransactionData 交易数据结构
+type TransactionData struct {
+	Date    string  `json:"date"`
+	Income  float64 `json:"income"`  // 收入
+	Expense float64 `json:"expense"` // 支出
+}
+
+// TransactionTrend 交易趋势数据
+type TransactionTrend struct {
+	WeeklyData  []TransactionData `json:"weeklyData"`
+	MonthlyData []TransactionData `json:"monthlyData"`
+}
+
+// GetIncomeTrend 获取收入趋势数据
+func GetIncomeTrend(walletID uint) (*TransactionTrend, error) {
+	now := time.Now()
+
+	// 获取最近30天的数据
+	monthlyData, err := getMonthlyData(walletID, now)
+	if err != nil {
+		return nil, err
+	}
+
+	// 获取最近7天的数据
+	weeklyData, err := getWeeklyData(walletID, now)
+	if err != nil {
+		return nil, err
+	}
+
+	return &TransactionTrend{
+		WeeklyData:  weeklyData,
+		MonthlyData: monthlyData,
+	}, nil
+}
+
+// GetExpenseTrend 获取支出趋势
+func GetExpenseTrend(walletID uint) (*TransactionTrend, error) {
+	now := time.Now()
+
+	monthlyData, err := getMonthlyData(walletID, now)
+	if err != nil {
+		return nil, err
+	}
+
+	weeklyData, err := getWeeklyData(walletID, now)
+	if err != nil {
+		return nil, err
+	}
+
+	return &TransactionTrend{
+		WeeklyData:  weeklyData,
+		MonthlyData: monthlyData,
+	}, nil
+}
+
+// getMonthlyData 获取月度收支数据（最近30天）
+func getMonthlyData(walletID uint, now time.Time) ([]TransactionData, error) {
+	var result []TransactionData
+
+	// 获取最近30天的数据
+	for i := 29; i >= 0; i-- {
+		currentDay := now.AddDate(0, 0, -i)
+		dayStart := time.Date(currentDay.Year(), currentDay.Month(), currentDay.Day(), 0, 0, 0, 0, now.Location())
+		dayEnd := dayStart.AddDate(0, 0, 1)
+
+		// 查询收入
+		var income float64
+		if err := model.DB.Model(&model.Transaction{}).
+			Select("COALESCE(SUM(amount), 0) as amount").
+			Where("to_wallet_id = ? AND type = ? AND status = ? AND created_at >= ? AND created_at < ?",
+				walletID, model.DirectTransaction, "completed", dayStart, dayEnd).
+			Scan(&income).Error; err != nil {
+			return nil, err
+		}
+
+		// 查询支出
+		var expense float64
+		if err := model.DB.Model(&model.Transaction{}).
+			Select("COALESCE(SUM(amount), 0) as amount").
+			Where("from_wallet_id = ? AND type = ? AND status = ? AND created_at >= ? AND created_at < ?",
+				walletID, model.DirectTransaction, "completed", dayStart, dayEnd).
+			Scan(&expense).Error; err != nil {
+			return nil, err
+		}
+
+		result = append(result, TransactionData{
+			Date:    dayStart.Format("01-02"),
+			Income:  income,
+			Expense: expense,
+		})
+	}
+
+	return result, nil
+}
+
+// getWeeklyData 获取周收支数据（最近7天）
+func getWeeklyData(walletID uint, now time.Time) ([]TransactionData, error) {
+	var result []TransactionData
+
+	// 获取最近7天的数据
+	for i := 6; i >= 0; i-- {
+		currentDay := now.AddDate(0, 0, -i)
+		dayStart := time.Date(currentDay.Year(), currentDay.Month(), currentDay.Day(), 0, 0, 0, 0, now.Location())
+		dayEnd := dayStart.AddDate(0, 0, 1)
+
+		// 查询收入
+		var income float64
+		if err := model.DB.Model(&model.Transaction{}).
+			Select("COALESCE(SUM(amount), 0) as amount").
+			Where("to_wallet_id = ? AND type = ? AND status = ? AND created_at >= ? AND created_at < ?",
+				walletID, model.DirectTransaction, "completed", dayStart, dayEnd).
+			Scan(&income).Error; err != nil {
+			return nil, err
+		}
+
+		// 查询支出
+		var expense float64
+		if err := model.DB.Model(&model.Transaction{}).
+			Select("COALESCE(SUM(amount), 0) as amount").
+			Where("from_wallet_id = ? AND type = ? AND status = ? AND created_at >= ? AND created_at < ?",
+				walletID, model.DirectTransaction, "completed", dayStart, dayEnd).
+			Scan(&expense).Error; err != nil {
+			return nil, err
+		}
+
+		result = append(result, TransactionData{
+			Date:    dayStart.Format("01-02"),
+			Income:  income,
+			Expense: expense,
+		})
+	}
+
+	return result, nil
 }

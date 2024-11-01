@@ -69,3 +69,85 @@ func UpdateWallet(c *gin.Context) {
 		"msg":  "更新钱包成功",
 	})
 }
+
+// GetWalletStats 获取钱包统计信息
+func GetWalletStats(c *gin.Context) {
+	var req struct {
+		WalletID uint `json:"wallet_id" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	stats, err := controller.GetWalletStats(req.WalletID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": stats})
+}
+
+// GetIncomeTrend 获取收入趋势
+func GetIncomeTrend(c *gin.Context) {
+	var req struct {
+		WalletID uint `json:"wallet_id" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code": -1,
+			"msg":  "参数错误: " + err.Error(),
+		})
+		return
+	}
+
+	trend, err := controller.GetIncomeTrend(req.WalletID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code": -1,
+			"msg":  "获取收入趋势失败: " + err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code": 0,
+		"data": trend,
+	})
+}
+
+// GetExpenseTrend 获取支出趋势
+func GetExpenseTrend(c *gin.Context) {
+	var req struct {
+		WalletID uint `json:"wallet_id" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    -1,
+			"message": "参数错误",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	// 从数据库获取支出趋势数据
+	trends, err := controller.GetExpenseTrend(req.WalletID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    -1,
+			"message": "获取支出趋势失败",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "success",
+		"data":    trends,
+	})
+}

@@ -4,7 +4,13 @@ import (
 	"fmt"
 	"hufu/model"
 	"hufu/utils"
+	"time"
 )
+
+type WalletStats struct {
+	TodayTransactions int64 `json:"today_transactions"` // 今日交易次数
+	TotalTransactions int64 `json:"total_transactions"` // 总交易次数
+}
 
 func NewWallet(name string, balance float64) (*model.Wallet, error) {
 	w := &model.Wallet{
@@ -83,4 +89,31 @@ func UpdateWallet(walletID uint, name string, balance float64) error {
 	}
 
 	return nil
+}
+
+func GetWalletStats(walletID uint) (*WalletStats, error) {
+	// 获取今天的开始时间（零点）
+	now := time.Now()
+	todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+
+	var todayCount int64
+	if err := model.DB.Model(&model.Transaction{}).
+		Where("(from_wallet_id = ? OR to_wallet_id = ?) AND created_at >= ? AND type = ?",
+			walletID, walletID, todayStart, model.DirectTransaction).
+		Count(&todayCount).Error; err != nil {
+		return nil, err
+	}
+
+	var totalCount int64
+	if err := model.DB.Model(&model.Transaction{}).
+		Where("(from_wallet_id = ? OR to_wallet_id = ?) AND type = ?",
+			walletID, walletID, model.DirectTransaction).
+		Count(&totalCount).Error; err != nil {
+		return nil, err
+	}
+
+	return &WalletStats{
+		TodayTransactions: todayCount,
+		TotalTransactions: totalCount,
+	}, nil
 }

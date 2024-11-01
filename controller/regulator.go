@@ -29,7 +29,7 @@ func (r *Regulator) CheckTransaction(tx *model.Transaction, w *model.Wallet) err
 	return nil
 }
 
-func ProcessPrivateKey(walletID uint) ([]string, error) {
+func ProcessPrivateKey(walletID uint, evidence string) ([]string, error) {
 	// 获取私钥
 	walletKey, err := GetWalletKeyByWalletID(walletID)
 	if err != nil {
@@ -41,20 +41,28 @@ func ProcessPrivateKey(walletID uint) ([]string, error) {
 		return nil, fmt.Errorf("failed to share private key: %v", err)
 	}
 
+	approved, err := supervisor.JuryInstance.HandleRegulatoryRequest(fmt.Sprintf("wallet-%d-%s", walletID, evidence))
+	if err != nil {
+		return nil, fmt.Errorf("failed to handle regulatory request: %v", err)
+	}
+
 	res := []string{}
 
 	for i, part := range parts {
-		encryptedPart, err := utils.EncryptData(supervisor.JuryInstance.Nodes[i].PublicKey, part)
-		if err != nil {
-			return nil, fmt.Errorf("failed to encrypt part %d: %v", i, err)
-		}
-		// 存储加密后的分片
-		id := fmt.Sprintf("%d-%d", walletID, i)
-		name := fmt.Sprintf("key_share_%s", id)
-		err = supervisor.JuryInstance.Nodes[i].StoreEncryptedKeyShare(id, name, encryptedPart)
-		res = append(res, encryptedPart)
-		if err != nil {
-			return nil, fmt.Errorf("failed to store encrypted part %d: %v", i, err)
+		if approved[supervisor.JuryInstance.Nodes[i].NodeID] {
+			encryptedPart, err := utils.EncryptData(supervisor.JuryInstance.Nodes[i].PublicKey, part)
+			if err != nil {
+				return nil, fmt.Errorf("failed to encrypt part %d: %v", i, err)
+			}
+			// 存储加密后的分片
+			id := fmt.Sprintf("%d-%d", walletID, i)
+			name := fmt.Sprintf("key_share_%s", id)
+			err = supervisor.JuryInstance.Nodes[i].StoreEncryptedKeyShare(id, name, encryptedPart)
+			if err != nil {
+				return nil, fmt.Errorf("failed to store encrypted part %d: %v", i, err)
+			}
+
+			res = append(res, part)
 		}
 	}
 

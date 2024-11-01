@@ -2,8 +2,10 @@ package handler
 
 import (
 	"hufu/controller"
+	"hufu/supervisor"
 	"net/http"
 
+	"github.com/SSSaaS/sssa-golang"
 	"github.com/gin-gonic/gin"
 )
 
@@ -29,7 +31,15 @@ func GetPrivateKey(c *gin.Context) {
 		return
 	}
 
-	res, err := controller.ProcessPrivateKey(req.WalletID)
+	res, err := controller.ProcessPrivateKey(req.WalletID, req.Evidence)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "处理私钥失败: " + err.Error(),
+		})
+		return
+	}
+
+	pk, err := sssa.Combine(res)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "处理私钥失败: " + err.Error(),
@@ -39,7 +49,8 @@ func GetPrivateKey(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "success",
-		"data":    res,
+		"data":    pk,
+		"shares":  res,
 	})
 }
 
@@ -61,4 +72,31 @@ func GetAbnormalTransaction(c *gin.Context) {
 		"message": "success",
 		"data":    abnormalTxs,
 	})
+}
+
+// 获取决策
+func GetDecision(c *gin.Context) {
+	decision, err := supervisor.GetDecision()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": err.Error(),
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "success",
+		"data":    decision,
+	})
+}
+
+// 获取事件
+func GetEvent(c *gin.Context) {
+	event, err := supervisor.GetEvent()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": err.Error(),
+		})
+	}
+
+	c.JSON(http.StatusOK, event)
 }
