@@ -34,6 +34,7 @@ func SetupDB() *gorm.DB {
 		&EncryptedTransaction{},
 		&DesensitizedTransaction{},
 		&AbnormalTransaction{},
+		&Invoice{},
 	)
 	if err != nil {
 		panic("failed to auto migrate: " + err.Error())

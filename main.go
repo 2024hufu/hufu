@@ -1,13 +1,12 @@
 package main
 
 import (
+	"fmt"
 	"hufu/config"
 	"hufu/controller"
 	"hufu/model"
 	"hufu/router"
 	"hufu/supervisor"
-
-	"fmt"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
