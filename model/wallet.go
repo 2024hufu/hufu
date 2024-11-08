@@ -5,8 +5,9 @@ import "gorm.io/gorm"
 // Wallet 钱包
 type Wallet struct {
 	gorm.Model
-	Name    string  `json:"name" gorm:"type:varchar(100);not null"`
-	Balance float64 `json:"balance" gorm:"type:decimal(20,8);default:0"`
+	Username   string  `json:"user_name" gorm:"type:varchar(100);not null"`   // 用户名
+	WalletName string  `json:"wallet_name" gorm:"type:varchar(100);not null"` // 钱包名称
+	Balance    float64 `json:"balance" gorm:"type:decimal(20,8);default:0"`   // 余额
 }
 
 // 钱包公私钥

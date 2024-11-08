@@ -1,6 +1,8 @@
 package model
 
-import "gorm.io/gorm"
+import (
+	"gorm.io/gorm"
+)
 
 // TransactionType 交易类型
 type TransactionType string
@@ -43,6 +45,8 @@ type DesensitizedTransaction struct {
 // AbnormalTransaction 异常交易
 type AbnormalTransaction struct {
 	gorm.Model
-	WalletID      uint `json:"wallet_id" gorm:"type:int;not null"`
-	TransactionID uint `json:"transaction_id" gorm:"type:int;not null"`
+	WalletID      uint   `json:"wallet_id" gorm:"type:int;not null"`
+	TransactionID uint   `json:"transaction_id" gorm:"type:int;not null"`
+	Evidence      string `json:"evidence" gorm:"type:text;not null"`  // 证据内容
+	Signature     string `json:"signature" gorm:"type:text;not null"` // 监管者签名
 }

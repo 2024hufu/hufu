@@ -21,8 +21,6 @@ type Invoice struct {
 	gorm.Model
 	InvoiceID     string  `json:"invoice_id"`     // 发票编号
 	IssueDate     string  `json:"issue_date"`     // 开票日期
-	BuyerName     string  `json:"buyer_name"`     // 买方名称
-	BuyerTaxID    string  `json:"buyer_tax_id"`   // 买方税号
 	SellerName    string  `json:"seller_name"`    // 卖方名称
 	SellerTaxID   string  `json:"seller_tax_id"`  // 卖方税号
 	ItemName      string  `json:"item_name"`      // 项目名称
