@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"hufu/model"
+	"hufu/utils"
 
 	"github.com/gin-gonic/gin"
 )
@@ -17,6 +18,7 @@ func CreateInvoice(c *gin.Context) {
 	}
 
 	// 创建发票记录
+	invoice.InvoiceID = utils.GenerateRandomNumber(20)
 	if err := model.DB.Create(&invoice).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "创建发票失败"})
 		return

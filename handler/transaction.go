@@ -1,8 +1,11 @@
 package handler
 
 import (
+	"encoding/json"
+	"hufu/config"
 	"hufu/controller"
 	"hufu/model"
+	"hufu/utils"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -11,6 +14,49 @@ import (
 type Req struct {
 	WalletID   uint   `json:"wallet_id"`
 	PrivateKey string `json:"private_key"`
+}
+
+// EncryptedTransfer 处理加密转账请求
+func EncryptedTransfer(c *gin.Context) {
+	// 获取加密请求数据
+	var encryptedReq struct {
+		EncryptedData string `json:"encrypted_data"`
+		KeyID         string `json:"key_id"`
+	}
+
+	if err := c.ShouldBindJSON(&encryptedReq); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code": -1,
+			"msg":  "参数错误: " + err.Error(),
+		})
+		return
+	}
+
+	// 使用私钥解密数据
+	privateKey := config.GlobalConfig.Tee.PrivateKey
+	decrypted, err := utils.RSADecrypt(encryptedReq.EncryptedData, privateKey)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code": -1,
+			"msg":  "解密失败: " + err.Error(),
+		})
+		return
+	}
+
+	// 解析解密后的数据
+	var txData struct {
+		FromWalletID uint    `json:"from_wallet_id"`
+		ToWalletID   uint    `json:"to_wallet_id"`
+		Amount       float64 `json:"amount"`
+	}
+
+	if err := json.Unmarshal([]byte(decrypted), &txData); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code": -1,
+			"msg":  "解析数据失败: " + err.Error(),
+		})
+		return
+	}
 }
 
 // Transfer 处理转账请求
