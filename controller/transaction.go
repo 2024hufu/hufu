@@ -2,6 +2,7 @@ package controller
 
 import (
 	"fmt"
+	"hufu/config"
 	"hufu/errors"
 	"hufu/model"
 	"hufu/utils"
@@ -68,12 +69,18 @@ func TransferFunds(from *model.Wallet, to *model.Wallet, amount float64) (*model
 // GetTransferHistory 获取转账历史
 func GetTransferHistory(walletID uint, page, pageSize int) (*model.PageResult, error) {
 	var total int64
-	var transactions []*model.Transaction
 
-	// 计算偏移量
+	// 定义包含用户名的查询结果结构
+	type TransactionWithUsername struct {
+		model.Transaction
+		FromUsername string `json:"from_username"`
+		ToUsername   string `json:"to_username"`
+	}
+
+	var transactions []TransactionWithUsername
 	offset := (page - 1) * pageSize
 
-	// 先获取总数
+	// 获取总数
 	if err := model.DB.Model(&model.Transaction{}).
 		Where("(from_wallet_id = ? OR to_wallet_id = ?) AND type = ?",
 			walletID, walletID, model.DirectTransaction).
@@ -81,12 +88,16 @@ func GetTransferHistory(walletID uint, page, pageSize int) (*model.PageResult, e
 		return nil, err
 	}
 
-	// 查询分页数据
-	if err := model.DB.Where("(from_wallet_id = ? OR to_wallet_id = ?) AND type = ?",
-		walletID, walletID, model.DirectTransaction).
+	// 使用JOIN查询获取用户名
+	if err := model.DB.Table("transactions").
+		Select("transactions.*, fw.username as from_username, tw.username as to_username").
+		Joins("LEFT JOIN wallets fw ON transactions.from_wallet_id = fw.id").
+		Joins("LEFT JOIN wallets tw ON transactions.to_wallet_id = tw.id").
+		Where("(transactions.from_wallet_id = ? OR transactions.to_wallet_id = ?) AND transactions.type = ?",
+			walletID, walletID, model.DirectTransaction).
 		Limit(pageSize).
 		Offset(offset).
-		Order("created_at DESC"). // 按创建时间倒序
+		Order("transactions.created_at DESC").
 		Find(&transactions).Error; err != nil {
 		return nil, err
 	}
@@ -113,11 +124,25 @@ func createOriginalTransaction(tx *gorm.DB, from *model.Wallet, to *model.Wallet
 
 // validateTransaction 验证交易合规性
 func validateTransaction(tx *gorm.DB, from *model.Wallet, originalTx *model.Transaction) error {
-	if originalTx.Amount > 10000 {
-		// 使用传入的事务对象创建异常交易记录
+	regulator := NewRegulator()
+	if err := regulator.CheckTransaction(originalTx, from); err != nil {
+		// 生成证据和签名
+		evidence := fmt.Sprintf("Transaction ID: %d, From: %d, To: %d, Amount: %f, Time: %s, Error: %v",
+			originalTx.ID, originalTx.FromWalletID, originalTx.ToWalletID,
+			originalTx.Amount, time.Now().Format(time.RFC3339), err)
+
+		// 使用监管者的私钥对证据进行签名
+		signature, err := utils.SignData(config.GlobalConfig.Tee.PrivateKey, evidence)
+		if err != nil {
+			return err
+		}
+
+		// 创建异常交易记录
 		abnormal := &model.AbnormalTransaction{
 			WalletID:      from.ID,
 			TransactionID: originalTx.ID,
+			Evidence:      evidence,
+			Signature:     signature,
 		}
 
 		if err := tx.Create(abnormal).Error; err != nil {
@@ -129,22 +154,6 @@ func validateTransaction(tx *gorm.DB, from *model.Wallet, originalTx *model.Tran
 		if err := tx.Save(originalTx).Error; err != nil {
 			return err
 		}
-
-		// 异步发送告警
-		// go func() {
-		// 	jsonData, err := json.Marshal(abnormal)
-		// 	if err != nil {
-		// 		log.Printf("marshal abnormal transaction failed: %v", err)
-		// 		return
-		// 	}
-
-		// 	resp, err := http.Post("http://127.0.0.1:3338/api/v1/regulator/alert", "application/json", bytes.NewBuffer(jsonData))
-		// 	if err != nil {
-		// 		log.Printf("send alert failed: %v", err)
-		// 		return
-		// 	}
-		// 	defer resp.Body.Close()
-		// }()
 
 		return errors.ErrTransactionAmountTooLarge
 	}
@@ -229,7 +238,7 @@ func createProxyTransactions(originalTx *model.Transaction, amount float64) ([]*
 		}
 		proxyTxs = append(proxyTxs, toProxyTx)
 
-		// 2. 创建从代理钱包到目标钱包的交易
+		// 2. 创建代理钱包到目标钱包的交易
 		fromProxyTx := &model.Transaction{
 			FromWalletID: proxyWallet.ID,
 			ToWalletID:   originalTx.ToWalletID,
@@ -443,30 +452,8 @@ type TransactionTrend struct {
 	MonthlyData []TransactionData `json:"monthlyData"`
 }
 
-// GetIncomeTrend 获取收入趋势数据
-func GetIncomeTrend(walletID uint) (*TransactionTrend, error) {
-	now := time.Now()
-
-	// 获取最近30天的数据
-	monthlyData, err := getMonthlyData(walletID, now)
-	if err != nil {
-		return nil, err
-	}
-
-	// 获取最近7天的数据
-	weeklyData, err := getWeeklyData(walletID, now)
-	if err != nil {
-		return nil, err
-	}
-
-	return &TransactionTrend{
-		WeeklyData:  weeklyData,
-		MonthlyData: monthlyData,
-	}, nil
-}
-
-// GetExpenseTrend 获取支出趋势
-func GetExpenseTrend(walletID uint) (*TransactionTrend, error) {
+// GetTrend 获取收支趋势
+func GetTrend(walletID uint) (*TransactionTrend, error) {
 	now := time.Now()
 
 	monthlyData, err := getMonthlyData(walletID, now)

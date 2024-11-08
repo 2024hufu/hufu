@@ -32,14 +32,14 @@ func InitWalletPool() {
 
 	// 获取所有以 ProxyWallet 开头的钱包
 	var existingWallets []*model.Wallet
-	if err := model.DB.Where("name LIKE ?", fmt.Sprintf("%s%%", initPrefix)).Find(&existingWallets).Error; err != nil {
+	if err := model.DB.Where("wallet_name LIKE ?", fmt.Sprintf("%s%%", initPrefix)).Find(&existingWallets).Error; err != nil {
 		log.Fatal(err)
 	}
 
 	if len(existingWallets) == 0 {
 		// 如果池中没有钱包，则创建新的钱包
 		for i := 0; i < initCount; i++ {
-			wallet, err := NewWallet(fmt.Sprintf("%s%d", initPrefix, i), initBalance)
+			wallet, err := NewWallet(fmt.Sprintf("%s%d", initPrefix, i), fmt.Sprintf("proxy-user%d", i), initBalance)
 			if err != nil {
 				log.Fatal(err)
 			}

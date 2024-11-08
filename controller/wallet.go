@@ -12,19 +12,12 @@ type WalletStats struct {
 	TotalTransactions int64 `json:"total_transactions"` // 总交易次数
 }
 
-func NewWallet(name string, balance float64) (*model.Wallet, error) {
+func NewWallet(walletName, username string, balance float64) (*model.Wallet, error) {
 	w := &model.Wallet{
-		Name:    name,
-		Balance: balance,
+		WalletName: walletName,
+		Username:   username,
+		Balance:    balance,
 	}
-
-	// Name cannot be repeated
-	// if _, err := GetWalletByName(name); err == nil {
-	// 	return nil, fmt.Errorf("wallet name already exists: %s", name)
-	// }
-	// if _, err := GetWalletByID(w.ID); err == nil {
-	// 	return nil, fmt.Errorf("wallet id already exists: %d", w.ID)
-	// }
 
 	if err := model.DB.Create(w).Error; err != nil {
 		return nil, err
@@ -43,9 +36,17 @@ func NewWallet(name string, balance float64) (*model.Wallet, error) {
 	return w, nil
 }
 
-func GetWalletByName(Name string) (*model.Wallet, error) {
+func GetWalletByWalletName(walletName string) (*model.Wallet, error) {
 	var w model.Wallet
-	if err := model.DB.Where("name = ?", Name).First(&w).Error; err != nil {
+	if err := model.DB.Where("wallet_name = ?", walletName).First(&w).Error; err != nil {
+		return nil, err
+	}
+	return &w, nil
+}
+
+func GetWalletByUsername(username string) (*model.Wallet, error) {
+	var w model.Wallet
+	if err := model.DB.Where("username = ?", username).First(&w).Error; err != nil {
 		return nil, err
 	}
 	return &w, nil
@@ -80,7 +81,7 @@ func UpdateWallet(walletID uint, name string, balance float64) error {
 	}
 
 	// 更新钱包信息
-	wallet.Name = name
+	wallet.WalletName = name
 	wallet.Balance = balance
 
 	// 保存更新
