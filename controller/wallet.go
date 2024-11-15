@@ -19,11 +19,21 @@ func NewWallet(walletName, username string, balance float64) (*model.Wallet, err
 		Balance:    balance,
 	}
 
+	// 统计id数量
+	var count int64
+	if err := model.DB.Model(&model.Wallet{}).Count(&count).Error; err != nil {
+		return nil, err
+	}
+
+	privateKey, publicKey := utils.GenerateRSAKey(int(count + 1))
+	if privateKey == "" || publicKey == "" {
+		return nil, fmt.Errorf("failed to generate RSA key")
+	}
+
 	if err := model.DB.Create(w).Error; err != nil {
 		return nil, err
 	}
 
-	privateKey, publicKey, _ := utils.GenerateKeys()
 	walletKey := &model.WalletKey{
 		WalletID:   w.ID,
 		PublicKey:  publicKey,

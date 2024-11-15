@@ -13,13 +13,42 @@ import (
 
 const (
 	TransactionStatusFailed  = "failed"
-	TransactionStatusSuccess = "success"
+	TransactionStatusSuccess = "completed"
 )
 
 const ProxyWalletCount = 3
 
-// TransferFunds 处理转账
-func TransferFunds(from *model.Wallet, to *model.Wallet, amount float64) (*model.Transaction, error) {
+// NormalTransfer 普通转账,不经过代理钱包
+func NormalTransfer(from *model.Wallet, to *model.Wallet, amount float64) (*model.Transaction, error) {
+	tx := model.DB.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	originalTx, err := createOriginalTransaction(tx, from, to, amount)
+	if err != nil {
+		tx.Rollback()
+		return nil, err
+	}
+
+	if err := updateWalletBalances(tx, from, to, amount); err != nil {
+		tx.Rollback()
+		return nil, err
+	}
+
+	originalTx.Status = TransactionStatusSuccess
+	if err := tx.Save(originalTx).Error; err != nil {
+		tx.Rollback()
+		return nil, err
+	}
+
+	return originalTx, tx.Commit().Error
+}
+
+// ProxyTransfer 代理转账, 经过代理钱包
+func ProxyTransfer(from *model.Wallet, to *model.Wallet, amount float64) (*model.Transaction, error) {
 	tx := model.DB.Begin()
 	defer func() {
 		if r := recover(); r != nil {
@@ -268,22 +297,23 @@ func createEncryptedTransaction(t *model.Transaction) (*model.EncryptedTransacti
 	}
 
 	// 加密交易
-	encryptedFromWalletID, err := utils.EncryptData(walletKey.PublicKey, fmt.Sprintf("%d", t.FromWalletID))
+	encryptedFromWalletID, err := utils.RSAEncryptWithHexKey(fmt.Sprintf("%d", t.FromWalletID), walletKey.PublicKey)
 	if err != nil {
 		return nil, err
 	}
 
-	encryptedToWalletID, err := utils.EncryptData(walletKey.PublicKey, fmt.Sprintf("%d", t.ToWalletID))
+	encryptedToWalletID, err := utils.RSAEncryptWithHexKey(fmt.Sprintf("%d", t.ToWalletID), walletKey.PublicKey)
 	if err != nil {
 		return nil, err
 	}
 
-	encryptedAmount, err := utils.EncryptData(walletKey.PublicKey, fmt.Sprintf("%f", t.Amount))
+	encryptedAmount, err := utils.RSAEncryptWithHexKey(fmt.Sprintf("%f", t.Amount), walletKey.PublicKey)
 	if err != nil {
 		return nil, err
 	}
 
 	return &model.EncryptedTransaction{
+		TransactionID:         t.ID,
 		EncryptedFromWalletID: encryptedFromWalletID,
 		EncryptedToWalletID:   encryptedToWalletID,
 		EncryptedAmount:       encryptedAmount,
@@ -337,41 +367,18 @@ func GetDesensitizedTransaction(walletID uint) ([]*model.DesensitizedTransaction
 }
 
 // GetReceivedTransactions 获取收款记录
-func GetReceivedTransactions(walletID uint, page, pageSize int) (*model.PageResult, error) {
-	var total int64
+func GetReceivedTransactions(walletID uint) ([]*model.Transaction, error) {
 	var transactions []*model.Transaction
 
-	// 计算偏移量
-	offset := (page - 1) * pageSize
-
-	// 先获取总数
-	if err := model.DB.Model(&model.Transaction{}).
-		Where("to_wallet_id = ? AND type = ? AND status = ?",
-			walletID,
-			model.DirectTransaction,
-			"completed").
-		Count(&total).Error; err != nil {
-		return nil, err
-	}
-
-	// 查询分页数据
-	if err := model.DB.Where("to_wallet_id = ? AND type = ? AND status = ?",
+	// 直接查询所有已完成的收款记录
+	if err := model.DB.Where("to_wallet_id = ? AND status = ?",
 		walletID,
-		model.DirectTransaction,
 		"completed").
-		Limit(pageSize).
-		Offset(offset).
-		Order("created_at DESC"). // 按创建时间倒序
 		Find(&transactions).Error; err != nil {
 		return nil, err
 	}
 
-	return &model.PageResult{
-		List:     transactions,
-		Total:    total,
-		Page:     page,
-		PageSize: pageSize,
-	}, nil
+	return transactions, nil
 }
 
 // TransactionStats 交易统计信息
@@ -392,7 +399,7 @@ func GetTransactionStats(walletID uint) (*TransactionStats, error) {
 	// 今天开始时间（0点）
 	todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 
-	// 本周开始时间（修正：从周一开始计算）
+	// 本周开始时间
 	offset := int(time.Monday - now.Weekday())
 	if offset > 0 {
 		offset = -6
@@ -486,8 +493,8 @@ func getMonthlyData(walletID uint, now time.Time) ([]TransactionData, error) {
 		var income float64
 		if err := model.DB.Model(&model.Transaction{}).
 			Select("COALESCE(SUM(amount), 0) as amount").
-			Where("to_wallet_id = ? AND type = ? AND status = ? AND created_at >= ? AND created_at < ?",
-				walletID, model.DirectTransaction, "completed", dayStart, dayEnd).
+			Where("to_wallet_id = ? AND status = ? AND created_at >= ? AND created_at < ?",
+				walletID, "completed", dayStart, dayEnd).
 			Scan(&income).Error; err != nil {
 			return nil, err
 		}
@@ -496,8 +503,8 @@ func getMonthlyData(walletID uint, now time.Time) ([]TransactionData, error) {
 		var expense float64
 		if err := model.DB.Model(&model.Transaction{}).
 			Select("COALESCE(SUM(amount), 0) as amount").
-			Where("from_wallet_id = ? AND type = ? AND status = ? AND created_at >= ? AND created_at < ?",
-				walletID, model.DirectTransaction, "completed", dayStart, dayEnd).
+			Where("from_wallet_id = ? AND status = ? AND created_at >= ? AND created_at < ?",
+				walletID, "completed", dayStart, dayEnd).
 			Scan(&expense).Error; err != nil {
 			return nil, err
 		}
@@ -526,8 +533,8 @@ func getWeeklyData(walletID uint, now time.Time) ([]TransactionData, error) {
 		var income float64
 		if err := model.DB.Model(&model.Transaction{}).
 			Select("COALESCE(SUM(amount), 0) as amount").
-			Where("to_wallet_id = ? AND type = ? AND status = ? AND created_at >= ? AND created_at < ?",
-				walletID, model.DirectTransaction, "completed", dayStart, dayEnd).
+			Where("to_wallet_id = ? AND status = ? AND created_at >= ? AND created_at < ?",
+				walletID, "completed", dayStart, dayEnd).
 			Scan(&income).Error; err != nil {
 			return nil, err
 		}
@@ -536,8 +543,8 @@ func getWeeklyData(walletID uint, now time.Time) ([]TransactionData, error) {
 		var expense float64
 		if err := model.DB.Model(&model.Transaction{}).
 			Select("COALESCE(SUM(amount), 0) as amount").
-			Where("from_wallet_id = ? AND type = ? AND status = ? AND created_at >= ? AND created_at < ?",
-				walletID, model.DirectTransaction, "completed", dayStart, dayEnd).
+			Where("from_wallet_id = ? AND status = ? AND created_at >= ? AND created_at < ?",
+				walletID, "completed", dayStart, dayEnd).
 			Scan(&expense).Error; err != nil {
 			return nil, err
 		}
