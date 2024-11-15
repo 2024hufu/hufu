@@ -425,7 +425,7 @@ func GetEvent() (EventResponse, error) {
 			"type": "function"
 		  }
 		],
-		"contractAddress": "0x33e56a083e135936c1144960a708c43a661706c0",
+		"contractAddress": "0x4721d1a77e0e76851d460073e64ea06d9c104194",
 		"fromBlock": 1,
 		"toBlock": -1,
 		"topics": {
@@ -443,7 +443,7 @@ func GetEvent() (EventResponse, error) {
 
 	// 设置请求头
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorizationtoken", "Token 5ec006f5c6437a2b786b27e7478b68030750393151c0a7bba916b8febd406a34")
+	req.Header.Set("Authorizationtoken", config.GlobalConfig.Fisco.Authorizationtoken)
 	req.Header.Set("referer", "http://45.8.113.140:5000/")
 	req.Header.Set("user-agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36")
 

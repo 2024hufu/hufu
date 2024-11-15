@@ -14,6 +14,6 @@ type Wallet struct {
 type WalletKey struct {
 	gorm.Model
 	WalletID   uint   `json:"wallet_id" gorm:"type:int;not null"`
-	PublicKey  string `json:"public_key" gorm:"type:varchar(256);not null"`
-	PrivateKey string `json:"private_key" gorm:"type:varchar(256);not null"`
+	PublicKey  string `json:"public_key" gorm:"type:varchar(1024);not null"`
+	PrivateKey string `json:"private_key" gorm:"type:varchar(1024);not null"`
 }

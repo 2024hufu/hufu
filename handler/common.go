@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"encoding/json"
 	"hufu/config"
 	"hufu/utils"
 
@@ -15,20 +16,29 @@ func GetEncryptionKeys(c *gin.Context) {
 }
 
 func EncryptData(c *gin.Context) {
-	type EncryptDataRequest struct {
-		Data string `json:"data"`
+	type Request struct {
+		FromWalletID uint `json:"from_wallet_id"`
+		ToWalletID   uint `json:"to_wallet_id"`
+		Amount       int  `json:"amount"`
 	}
 
-	var request EncryptDataRequest
+	var request Request
 	if err := c.ShouldBindJSON(&request); err != nil {
 		c.JSON(400, gin.H{"error": err.Error()})
 		return
 	}
 
-	res, err := utils.EncryptData(request.Data, config.GlobalConfig.Tee.PublicKey)
+	data, err := json.Marshal(request)
 	if err != nil {
 		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(200, gin.H{"data": res})
+
+	encryptedData, err := utils.RSAEncryptWithHexKey(string(data), config.GlobalConfig.Tee.PublicKey)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(200, gin.H{"data": encryptedData})
 }
