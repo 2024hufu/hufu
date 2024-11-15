@@ -24,20 +24,26 @@ type Config struct {
 	} `yaml:"database"`
 
 	Fisco struct {
-		IsSMCrypto  bool   `yaml:"is_sm_crypto"`
-		GroupID     string `yaml:"group_id"`
-		DisableSsl  bool   `yaml:"disable_ssl"`
-		Host        string `yaml:"host"`
-		Port        int    `yaml:"port"`
-		TLSCaFile   string `yaml:"tls_ca_file"`
-		TLSKeyFile  string `yaml:"tls_key_file"`
-		TLSCertFile string `yaml:"tls_cert_file"`
+		IsSMCrypto         bool   `yaml:"is_sm_crypto"`
+		GroupID            string `yaml:"group_id"`
+		DisableSsl         bool   `yaml:"disable_ssl"`
+		Host               string `yaml:"host"`
+		Port               int    `yaml:"port"`
+		TLSCaFile          string `yaml:"tls_ca_file"`
+		TLSKeyFile         string `yaml:"tls_key_file"`
+		TLSCertFile        string `yaml:"tls_cert_file"`
+		Authorizationtoken string `yaml:"Authorizationtoken"`
 	} `yaml:"fisco"`
 
 	Contract struct {
 		KeyShareContract string `yaml:"key_share_contract"`
 		DecisionContract string `yaml:"decision_contract"`
 	} `yaml:"contract"`
+
+	Tee struct {
+		PrivateKey string `yaml:"private_key"`
+		PublicKey  string `yaml:"public_key"`
+	} `yaml:"tee"`
 }
 
 var GlobalConfig Config
